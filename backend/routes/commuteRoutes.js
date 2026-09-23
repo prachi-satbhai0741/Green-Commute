@@ -1,7 +1,7 @@
-const express = require('express');
-const router = express.Router();
-const { calculateRoutes } = require('../controllers/commuteController');
-
-router.post('/calculate', calculateRoutes);
-
+const router = require("express").Router();
+router.post(
+  "/calculate",
+  require("../middleware/auth").protect,
+  require("../controllers/commuteController").calculateRoutes,
+);
 module.exports = router;

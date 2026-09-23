@@ -1,24 +1,30 @@
-const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
-
-const connectDB = async () => {
-  try {
-    let uri = process.env.MONGODB_URI;
-    
-    // Fallback to in-memory server if no real URI is provided
-    if (!uri || uri.includes('localhost')) {
-      console.log('No MongoDB URI found. Starting in-memory MongoDB Server...');
-      const mongoServer = await MongoMemoryServer.create();
-      uri = mongoServer.getUri();
-    }
-
-    const conn = await mongoose.connect(uri);
-
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
+const mongoose = require("mongoose");
+let memoryServer;
+async function connectDB() {
+  let uri = process.env.MONGODB_URI;
+  if (!uri) {
+    if (
+      process.env.NODE_ENV === "production" ||
+      process.env.DEMO_MODE !== "true"
+    )
+      throw new Error(
+        "Set MONGODB_URI or explicitly enable temporary DEMO_MODE=true.",
+      );
+    memoryServer =
+      await require("mongodb-memory-server").MongoMemoryServer.create();
+    uri = memoryServer.getUri();
+    console.warn(
+      "DEMO MODE: accounts and trips are temporary and disappear when the server stops.",
+    );
   }
-};
-
-module.exports = connectDB;
+  await mongoose.connect(uri);
+  await Promise.all([
+    require("../models/User").init(),
+    require("../models/Trip").init(),
+  ]);
+}
+async function closeDB() {
+  await mongoose.disconnect();
+  if (memoryServer) await memoryServer.stop();
+}
+module.exports = { connectDB, closeDB };

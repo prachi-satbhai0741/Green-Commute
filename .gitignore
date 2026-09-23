@@ -120,3 +120,6 @@ dist
 
 # Mac OS X
 .DS_Store
+
+# Local architecture analysis cache
+graphify-out/

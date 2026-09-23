@@ -1,0 +1,20 @@
+{
+  "name": "green-commute",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm ci --prefix backend && npm ci --prefix frontend",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "test": "npm test --prefix backend",
+    "format": "prettier --write frontend/src backend scripts README.md",
+    "check": "npm run lint && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9"
+  }
+}

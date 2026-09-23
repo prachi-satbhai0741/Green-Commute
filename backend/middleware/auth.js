@@ -1,33 +1,25 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const { secret } = require("../config/security");
 const protect = async (req, res, next) => {
-  let token;
-
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      // Get token from header
-      token = req.headers.authorization.split(' ')[1];
-
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-
-      // Get user from the token
-      req.user = await User.findById(decoded.id).select('-password');
-
-      next();
-    } catch (error) {
-      console.error(error);
-      res.status(401).json({ message: 'Not authorized' });
-    }
+  const cookie = req.headers.cookie
+    ?.split(";")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith("gc_session="))
+    ?.slice(11);
+  const token =
+    cookie || req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
+  try {
+    const decoded = jwt.verify(token || "", secret, {
+      algorithms: ["HS256"],
+      audience: "session",
+    });
+    req.user = await User.findById(decoded.id);
+    if (!req.user)
+      return res.status(401).json({ message: "Please sign in again." });
+  } catch {
+    return res.status(401).json({ message: "Please sign in to continue." });
   }
-
-  if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token' });
-  }
+  next();
 };
-
 module.exports = { protect };

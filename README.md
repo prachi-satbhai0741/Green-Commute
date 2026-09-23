@@ -1,186 +1,127 @@
-<div align="center">
-
 # GreenCommute
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-22C55E)](LICENSE)
+A working full-stack commute comparison and personal impact tracker built with Next.js 16, React 19, Express 5, and MongoDB.
 
-Sustainability-focused web platform that helps users make smarter commuting decisions by prioritizing **environmental impact alongside convenience**.  
-Designed to encourage eco-friendly travel habits through intelligent route planning and a clean, user-first experience.
+## Run locally
 
-</div>
+Requires Node.js **20.19+** (Node 22 recommended), npm, and internet access for dependency installation. From the repository root:
 
----
-
-## Features
-
-- **Eco-Friendly Route Planning** — Choose travel routes optimized for lower environmental impact  
-- **Minimal Green UI** — Clean and modern interface built around sustainability-focused design  
-- **Authentication System** — Sign In and Register pages with scalable authentication flow  
-- **Protected Commute Access** — Route planning available only after user authentication  
-- **Source & Destination Input** — Enter trip locations for commute planning workflow  
-- **Scalable Architecture** — Structured for future MERN stack backend integration and feature expansion  
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation & Running Locally
-
-**1. Clone the repo**
-```bash
-git clone https://github.com/prachi-satbhai0741/GreenCommute.git
-cd Green-Commute-main
+```sh
+npm ci
+npm run setup
+npm run dev
 ```
 
-**2. Start the Backend** (open a terminal)
-```bash
+Open **http://localhost:3000**. Create an account, open **Plan a trip**, compare a journey, and log the mode you actually completed. **My impact** shows your totals, milestones, and trip history.
+
+The development launcher creates `backend/.env` and `frontend/.env` from their examples only when missing. It starts both servers. By default, `DEMO_MODE=true` explicitly starts temporary MongoDB; first run downloads a MongoDB binary (about 123 MB). The app displays a demo banner. **Accounts and trips disappear when the backend stops.** No seeded accounts or passwords exist.
+
+For persistent storage, set `MONGODB_URI` in `backend/.env` to a local MongoDB instance or Atlas connection string. Localhost URIs are respected. Set `DEMO_MODE=false`. If neither a URI nor explicit demo mode is provided, the API refuses to start.
+
+To run servers separately:
+
+```sh
+# Terminal 1
 cd backend
-npm install
-node server.js
-```
+cp .env.example .env
+npm run dev
 
-**3. Start the Frontend** (open another terminal)
-```bash
+# Terminal 2, from repo root
 cd frontend
-npm install
+cp .env.example .env
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000) in your browser.
+## What works
 
-Create environment variables:
+- Registration, login, logout, HttpOnly cookie sessions, protected planning and history.
+- Server-side location lookup and road-distance retrieval using Nominatim and OSRM.
+- A known-distance option for offline-provider comparisons; no synthetic distances generated from place names.
+- Four travel-mode comparisons, sorting by carbon or time, and clearly labeled assumptions.
+- Signed, user-bound comparisons valid for two hours. The API ignores client-provided carbon totals.
+- Completed trip logging, unique comparison IDs to prevent duplicate submissions, account-isolated history, and deletion with confirmation.
+- Impact totals calculated from recorded trips; active days counted in UTC. Eco points and four achievement milestones.
+- Responsive desktop/mobile layouts, keyboard focus states, form labels, visible errors, and loading/empty states.
+- Integration tests and GitHub Actions for lint, tests, and production build.
 
-```env
-MONGODB_URI=your-mongodb-url
-JWT_SECRET=your-secret-key
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+## What the numbers mean
+
+This is a **planning and self-reporting MVP**, not a live navigation service or verified carbon-offset product.
+
+OSRM supplies a **driving road distance** and estimated driving duration. Other modes use that distance for comparison; walking, cycling and transit may have different routes. We do not claim that a transit service exists or that a driving route is safe for pedestrians/cyclists. Confirm a route in a navigation app before traveling. Full resolved location names appear above results so you can check the matched places.
+
+Manual mode uses the distance entered by the user. Provider failures are shown as errors; the app never quietly invents a route.
+
+Illustrative assumptions, deliberately disclosed in the planner:
+
+| Mode             | kg CO₂ / passenger-km |                         Estimated speed |
+| ---------------- | --------------------: | --------------------------------------: |
+| Driving alone    |                 0.171 | OSRM duration or 30 km/h in manual mode |
+| Public transport |                 0.060 |             20 km/h plus 10-minute wait |
+| Cycling          |  0 tailpipe emissions |                                 15 km/h |
+| Walking          |  0 tailpipe emissions |                                  5 km/h |
+
+These are configurable planning assumptions in `backend/services/routing.js`, not audited emission factors. Vehicle type, occupancy, electricity mix, route, terrain and lifecycle emissions are not modeled. Saved CO₂ is relative to driving alone. Eco points equal estimated saved kg × 100, rounded per trip; they have no monetary value. Trips are self-reported. Repeating a newly calculated journey is allowed; there is no GPS verification.
+
+## Location services
+
+Location queries leave the application and are sent to configured providers. The public Nominatim service is used only on explicit search submission, cached for 24 hours (up to 500 locations), and serialized to at most one request every 1.1 seconds per API process. Attribution is visible in the footer.
+
+Read the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/) and [OSRM documentation](https://project-osrm.org/docs/). Public services have no availability guarantee. For a deployed or multi-instance service, use an appropriate hosted/self-hosted geocoder and routing provider; centralize caching and rate limiting. Set `GEOCODER_URL`, `ROUTER_URL`, and `GEOCODER_USER_AGENT` as appropriate.
+
+## Configuration
+
+| Variable       | Location | Purpose                                                                                        |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`  | backend  | Persistent database connection                                                                 |
+| `DEMO_MODE`    | backend  | Explicit temporary local database; prohibited in production without a URI                      |
+| `JWT_SECRET`   | backend  | At least 32 random characters required in production; development generates a temporary secret |
+| `FRONTEND_URL` | backend  | Allowed browser origin; defaults to `http://localhost:3000`                                    |
+| `PORT`         | backend  | API port, default `5000`                                                                       |
+| `API_URL`      | frontend | Internal API origin, default `http://127.0.0.1:5000`; used by Next.js rewrites                 |
+
+Generate a secret using `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`. Never commit `.env` files.
+
+## Production
+
+1. Provision persistent MongoDB and an API host. Set `NODE_ENV=production`, `MONGODB_URI`, `JWT_SECRET`, and the exact HTTPS `FRONTEND_URL`.
+2. Set frontend `API_URL` to the reachable backend origin **before building**. Browser requests use same-origin `/api`; no localhost URLs are shipped to the browser.
+3. Run `npm run build` in `frontend`, then `npm start`. Start the backend with `npm start` in `backend`.
+4. Use HTTPS because production session cookies are Secure. Keep the API behind the application proxy/private networking where possible.
+5. Configure production-capacity location providers and a shared abuse-control store before scaling to multiple processes. Current rate limiting is deliberately single-process and uses the direct peer address (no untrusted proxy headers).
+
+Deploy both services; this frontend cannot be exported as a static-only site because it proxies API requests. OAuth, password reset/email delivery, real-time traffic, live transit timetables, and GPS trip verification are not implemented or advertised as working.
+
+## Validation
+
+```sh
+npm run lint
+npm test
+npm run build
+# or all three:
+npm run check
 ```
 
-Run development server:
+Tests start isolated temporary MongoDB and HTTP servers. They cover registration validation, login, protected routes, forged comparisons, arbitrary carbon values, duplicate and concurrent submissions, account isolation, history deletion, totals, and cross-origin rejection. They do not depend on live location provider availability. The first test run requires a MongoDB binary download.
 
-```bash
-npm run dev
-```
-
-Open:
-
-```bash
-http://localhost:3000
-```
-
----
-
-## How It Works
+## Layout
 
 ```text
-User visits landing page
-        ↓
-User registers or signs in
-        ↓
-Authenticated access is granted
-        ↓
-User enters source and destination
-        ↓
-System processes commute options
-        ↓
-Route recommendations prioritize sustainability
+backend/
+  app.js                 Express middleware and API registration
+  server.js              Database-first startup and shutdown
+  config/                Database lifecycle and signing secret
+  controllers/           Authentication, comparisons, trip history
+  middleware/auth.js     Cookie/Bearer session verification
+  models/                User and Trip schemas
+  services/              Routing providers, assumptions, impact aggregation
+  test/                  API integration and provider tests
+frontend/
+  src/app/               Home, authentication, planner, impact/history
+  src/components/        Shared auth form, navigation, session, guard
+  src/lib/api.ts         Typed API client and error handling
+scripts/dev.mjs          Local two-server launcher
+.github/workflows/ci.yml CI checks
 ```
 
----
-
-## Project Structure
-
-```bash
-Green-Commute-main/
-│
-├── frontend/                   # Next.js App (TypeScript)
-│   ├── src/
-│   │   └── app/
-│   │       ├── page.tsx        # Home / Dashboard page
-│   │       ├── layout.tsx      # Navbar + Footer layout
-│   │       ├── globals.css     # Global styles & design tokens
-│   │       ├── signin/
-│   │       │   └── page.tsx    # Sign In page
-│   │       ├── register/
-│   │       │   └── page.tsx    # Register page
-│   │       └── plan/
-│   │           └── page.tsx    # Commute planner page
-│   ├── package.json
-│   └── next.config.ts
-│
-├── backend/                    # Node.js / Express API
-│   ├── config/
-│   │   └── db.js               # MongoDB connection
-│   ├── controllers/
-│   │   ├── authController.js   # Register, Login, GetMe
-│   │   ├── commuteController.js # Route calculation engine
-│   │   └── userController.js   # Impact tracking (trips, CO2, points)
-│   ├── middleware/
-│   │   └── auth.js             # JWT protect middleware
-│   ├── models/
-│   │   └── User.js             # Mongoose User schema
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── commuteRoutes.js
-│   │   └── userRoutes.js
-│   ├── .env                    # Environment variables
-│   ├── server.js               # Express server entry point
-│   └── package.json
-│
-├── .gitignore
-├── LICENSE
-└── README.md
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---------|------------|
-| Frontend | Next.js, React |
-| Language | TypeScript |
-| Styling | Vanilla CSS |
-| Backend | Node.js, Express.js |
-| Database | MongoDB |
-| Authentication | JWT, Google OAuth |
-| Architecture | MERN Stack |
-
----
-
-## Future Improvements
-
-- Carbon footprint calculation for each route  
-- Public transport integration  
-- Live traffic and route optimization  
-- Personalized sustainability insights  
-- Commute history tracking and analytics  
-- Gamification with eco-points and rewards  
-
----
-
-## Contributing
-
-```bash
-git checkout -b feature/your-feature
-# make changes
-git commit -m "feat: describe your change"
-git push origin feature/your-feature
-```
-
-Create a Pull Request with a clear description of your changes.
-
----
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for more details.
+MIT licensed. See [LICENSE](LICENSE).
