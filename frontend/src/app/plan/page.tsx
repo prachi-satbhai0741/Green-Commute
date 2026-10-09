@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import {
   ArrowDownUp,
@@ -10,33 +11,54 @@ import {
   Footprints,
   Leaf,
   MapPin,
+  Sparkles,
+  Zap,
+  Filter,
+  Navigation,
 } from "lucide-react";
 import Link from "next/link";
 import Guard from "@/components/guard";
 import { useSession } from "@/components/session";
+import { useToast } from "@/components/toast";
 import { api, ApiError, Comparison, RouteOption, User } from "@/lib/api";
+import RouteMapVisualizer from "@/components/route-map-visualizer";
+import EcoEquivalents from "@/components/eco-equivalents";
+
 const icons: Record<string, typeof Bike> = {
   car: Car,
   transit: Bus,
   bike: Bike,
   walk: Footprints,
 };
+
+const presets = [
+  { label: "Office Commute", source: "Greenwich High St", destination: "Tech City Campus", km: 7.5 },
+  { label: "University Loop", source: "North Residence Hall", destination: "Science Library", km: 3.2 },
+  { label: "Weekend Market", source: "Oakwood Neighborhood", destination: "Farmers Market", km: 4.8 },
+];
+
 export default function Plan() {
   const { user, setUser } = useSession();
-  const [source, setSource] = useState(""),
-    [destination, setDestination] = useState(""),
-    [manual, setManual] = useState(false),
-    [distance, setDistance] = useState("");
-  const [result, setResult] = useState<Comparison | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [saving, setSaving] = useState(false),
-    [saved, setSaved] = useState(""),
-    [sort, setSort] = useState("green");
+  const { toast } = useToast();
+  const [source, setSource] = useState("");
+  const [destination, setDestination] = useState("");
+  const [manual, setManual] = useState(false);
+  const [distance, setDistance] = useState("");
+
+  const [result, setResult] = useState<Comparison | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState("");
+  const [sort, setSort] = useState("green");
+
   function failure(e: unknown) {
     if (e instanceof ApiError && e.status === 401) setUser(null);
-    setError(e instanceof Error ? e.message : "Please try again.");
+    const msg = e instanceof Error ? e.message : "Please try again.";
+    setError(msg);
+    toast(msg, "error");
   }
+
   async function search(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -44,61 +66,91 @@ export default function Plan() {
     setSaved("");
     setResult(null);
     try {
-      setResult(
-        await api<Comparison>("/commute/calculate", {
-          method: "POST",
-          body: JSON.stringify({
-            source,
-            destination,
-            ...(manual ? { distanceKm: Number(distance) } : {}),
-          }),
+      const data = await api<Comparison>("/commute/calculate", {
+        method: "POST",
+        body: JSON.stringify({
+          source,
+          destination,
+          ...(manual ? { distanceKm: Number(distance) } : {}),
         }),
-      );
+      });
+      setResult(data);
+      toast("Commute calculated successfully!", "success");
     } catch (e) {
       failure(e);
     } finally {
       setBusy(false);
     }
   }
+
+  function applyPreset(preset: typeof presets[0]) {
+    setSource(preset.source);
+    setDestination(preset.destination);
+    setManual(true);
+    setDistance(String(preset.km));
+  }
+
   async function log(route: RouteOption) {
     if (!result || saving || saved) return;
     setSaving(true);
     setError("");
     try {
-      setUser(
-        await api<User>("/user/select-route", {
-          method: "POST",
-          body: JSON.stringify({ quote: result.quote, mode: route.mode }),
-        }),
-      );
+      const updatedUser = await api<User>("/user/select-route", {
+        method: "POST",
+        body: JSON.stringify({ quote: result.quote, mode: route.mode }),
+      });
+      setUser(updatedUser);
       setSaved(route.label);
+      toast(`Trip logged! +${Math.round(route.co2Saved * 100)} Eco Points earned 🎉`, "success");
     } catch (e) {
       failure(e);
     } finally {
       setSaving(false);
     }
   }
+
   const sorted = result
     ? [...result.routes].sort((a, b) =>
         sort === "time"
           ? a.durationMinutes - b.durationMinutes
-          : a.emissionsKg - b.emissionsKg ||
-            a.durationMinutes - b.durationMinutes,
+          : a.emissionsKg - b.emissionsKg || a.durationMinutes - b.durationMinutes
       )
     : [];
+
+  const maxEmissions = result ? Math.max(...result.routes.map((r) => r.emissionsKg), 0.1) : 1;
+
   return (
     <Guard>
-      <div className="wrap planner">
+      <div className="wrap planner-page">
         <header className="page-heading">
-          <span className="eyebrow">MAKE TODAY’S JOURNEY A LITTLE GREENER</span>
+          <div className="eyebrow-pill">
+            <Sparkles size={14} className="text-emerald" /> MAKE TODAY&apos;S JOURNEY GREENER
+          </div>
           <h1>Where to, {user?.name.split(" ")[0]}?</h1>
-          <p>A thoughtful commute starts with a simple comparison.</p>
+          <p>Compare commute travel options side by side and log your lighter footprint.</p>
         </header>
+
+        {/* Quick Presets Bar */}
+        <div className="presets-bar">
+          <span className="presets-label">Quick Presets:</span>
+          {presets.map((p, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className="preset-btn"
+              onClick={() => applyPreset(p)}
+            >
+              <Navigation size={13} /> {p.label} ({p.km} km)
+            </button>
+          ))}
+        </div>
+
         <div className="planner-layout">
+          {/* Planner Input Form Panel */}
           <section className="planner-form panel">
             <div className="panel-heading">
-              <MapPin size={21} />
-              <h2>Your journey</h2>
+              <MapPin size={22} className="text-emerald" />
+              <h2>Plan Your Route</h2>
             </div>
             <form onSubmit={search}>
               <fieldset disabled={busy || saving}>
@@ -109,13 +161,15 @@ export default function Plan() {
                     maxLength={200}
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
-                    placeholder="Area or landmark, city"
+                    placeholder="e.g. 10 Downing St, London"
                   />
                 </label>
+
                 <button
                   type="button"
                   className="swap-button"
                   aria-label="Swap starting point and destination"
+                  title="Swap locations"
                   onClick={() => {
                     setSource(destination);
                     setDestination(source);
@@ -123,6 +177,7 @@ export default function Plan() {
                 >
                   <ArrowDownUp size={16} />
                 </button>
+
                 <label>
                   Destination
                   <input
@@ -130,19 +185,21 @@ export default function Plan() {
                     maxLength={200}
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Where are you headed?"
+                    placeholder="e.g. Hyde Park, London"
                   />
                 </label>
+
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
                     checked={manual}
                     onChange={(e) => setManual(e.target.checked)}
-                  />{" "}
-                  I already know the distance
+                  />
+                  <span>I already know the distance in km</span>
                 </label>
+
                 {manual && (
-                  <label>
+                  <label className="manual-distance-field">
                     One-way distance (km)
                     <input
                       type="number"
@@ -156,67 +213,84 @@ export default function Plan() {
                     />
                   </label>
                 )}
-                <button className="button full" disabled={busy || saving}>
-                  {busy ? "Finding your journey…" : "Compare my options"}{" "}
+
+                <button className="button button-lg full" disabled={busy || saving}>
+                  {busy ? "Calculating options…" : "Compare Travel Options"}
                   <ArrowUpRight size={18} />
                 </button>
               </fieldset>
             </form>
             <p className="small-note">
               {manual
-                ? "Your distance is used for every mode. All results are estimates."
-                : "Include your city for a closer match. Location searches are sent to OpenStreetMap and OSRM."}
+                ? "Calculations use your specified distance for all modes."
+                : "Geocoding powered by OpenStreetMap & OSRM routing."}
             </p>
           </section>
+
+          {/* Results Area */}
           <section className="results" aria-live="polite">
             {error && (
-              <p role="alert" className="notice error">
+              <div role="alert" className="notice error">
                 {error}
-              </p>
+              </div>
             )}
+
             {saved && (
               <div className="notice success">
-                <Check size={19} />
+                <Check size={20} />
                 <div>
-                  {saved} trip logged. Your impact is up to date.{" "}
-                  <Link href="/history">View my trips →</Link>
+                  <strong>{saved} trip logged!</strong> Your impact history and eco points have been updated.{" "}
+                  <Link href="/history" className="text-link underline">
+                    View My Impact →
+                  </Link>
                 </div>
               </div>
             )}
+
             {busy ? (
               <div className="results-empty">
                 <div className="loading-orbit">
-                  <Leaf size={32} />
+                  <Leaf size={36} className="spinning-leaf" />
                 </div>
-                <h2>Finding a better way.</h2>
-                <p>Looking up your journey. This can take a few seconds.</p>
+                <h2>Finding cleaner paths…</h2>
+                <p>Retrieving distance data and calculating emissions. Please wait a moment.</p>
               </div>
             ) : result ? (
               <>
                 <div className="result-heading">
                   <div>
-                    <span className="eyebrow">YOUR COMMUTE, COMPARED</span>
-                    <h2>{result.routes[0].distanceKm} km of possibilities</h2>
+                    <span className="eyebrow">YOUR COMMUTE COMPARED</span>
+                    <h2>{result.routes[0].distanceKm} km Journey Options</h2>
                   </div>
                   <label className="sort-label">
-                    Sort by
+                    <Filter size={14} /> Sort By
                     <select
                       value={sort}
                       onChange={(e) => setSort(e.target.value)}
                     >
-                      <option value="green">Lowest carbon</option>
-                      <option value="time">Shortest time</option>
+                      <option value="green">Lowest CO₂ (Greener Pick)</option>
+                      <option value="time">Shortest Duration</option>
                     </select>
                   </label>
                 </div>
+
                 <p className="resolved-route">
-                  <strong>From</strong> {result.source}
-                  <br />
-                  <strong>To</strong> {result.destination}
+                  <strong>From:</strong> {result.source} &nbsp;→&nbsp; <strong>To:</strong> {result.destination}
                 </p>
+
+                {/* Map Visualizer for the calculated route */}
+                <RouteMapVisualizer
+                  source={result.source}
+                  destination={result.destination}
+                  distanceKm={result.routes[0].distanceKm}
+                  selectedMode={sorted[0]?.mode}
+                />
+
+                {/* Route Cards */}
                 <div className="route-grid">
                   {sorted.map((route) => {
-                    const Icon = icons[route.mode];
+                    const Icon = icons[route.mode] || Bike;
+                    const emissionPercent = (route.emissionsKg / maxEmissions) * 100;
                     return (
                       <article
                         key={route.mode}
@@ -228,78 +302,99 @@ export default function Plan() {
                           </span>
                           {route.recommended && (
                             <span className="recommend-tag">
-                              Low-carbon pick
+                              <Sparkles size={12} /> Low Carbon Pick
                             </span>
                           )}
                         </div>
+
                         <h3>{route.label}</h3>
                         <div className="route-time">
-                          {route.durationMinutes}
-                          <span> min · estimated</span>
+                          {route.durationMinutes} <span className="time-unit">mins est.</span>
                         </div>
+
+                        {/* CO2 Emissions Progress Visualizer */}
+                        <div className="emissions-bar-box">
+                          <div className="emissions-bar-labels">
+                            <span>CO₂ Emissions</span>
+                            <strong>{route.emissionsKg.toFixed(2)} kg</strong>
+                          </div>
+                          <div className="emissions-track">
+                            <div
+                              className="emissions-fill"
+                              style={{
+                                width: `${Math.max(5, emissionPercent)}%`,
+                                backgroundColor: route.emissionsKg === 0 ? "var(--emerald)" : route.emissionsKg < 0.5 ? "var(--cyan)" : "var(--amber)",
+                              }}
+                            />
+                          </div>
+                        </div>
+
                         <div className="route-metrics">
                           <span>
-                            Estimated CO₂{" "}
-                            <strong>{route.emissionsKg.toFixed(2)} kg</strong>
+                            vs. solo driving:
+                            <strong className="green-text">
+                              −{route.co2Saved.toFixed(2)} kg CO₂
+                            </strong>
                           </span>
                           <span>
-                            vs. driving alone{" "}
-                            <strong className="green">
-                              −{route.co2Saved.toFixed(2)} kg
+                            Points to earn:
+                            <strong className="text-amber">
+                              +{Math.round(route.co2Saved * 100)} pts
                             </strong>
                           </span>
                         </div>
+
                         <button
-                          className="button secondary full"
+                          type="button"
+                          className={`button full ${route.recommended ? "button-accent" : "secondary"}`}
                           disabled={saving || !!saved}
                           onClick={() => void log(route)}
                         >
-                          {saved
-                            ? "Journey logged"
+                          {saved === route.label
+                            ? "Completed & Logged"
                             : saving
-                              ? "Saving…"
-                              : "I completed this trip"}
+                            ? "Saving Trip…"
+                            : "I Completed This Trip"}
                           <Check size={16} />
                         </button>
                       </article>
                     );
                   })}
                 </div>
+
+                {/* Real-time Equivalents Card */}
+                {sorted[0] && (
+                  <div className="route-equivalents-wrapper">
+                    <EcoEquivalents co2SavedKg={sorted[0].co2Saved} />
+                  </div>
+                )}
+
                 <div className="method-note">
-                  <Leaf size={19} />
+                  <Leaf size={20} className="text-emerald" />
                   <p>
-                    <strong>A comparison, not turn-by-turn directions.</strong>{" "}
+                    <strong>Emissions & Method Note:</strong>{" "}
                     {result.basis === "road"
-                      ? "Uses a driving road distance from OSRM. Walking, cycling and transit may follow different routes."
-                      : "Uses the distance you provided."}{" "}
-                    Transit availability is not verified. Time estimates exclude
-                    live traffic. CO₂ uses illustrative per-km factors: car
-                    0.171 kg, transit 0.060 kg, cycle/walk 0 tailpipe emissions.
-                    Check a navigation app before traveling. Only log a trip
-                    after completing it.
+                      ? "Distance is derived from OSRM road geometry. Actual walking, cycling, or transit routes may vary."
+                      : "Distance provided manually by user."}{" "}
+                    Factors: Car ~0.171 kg CO₂/km, Transit ~0.060 kg CO₂/km, Cycle & Walk 0 tailpipe emissions. Always verify transit schedules and safety conditions before traveling.
                   </p>
                 </div>
               </>
             ) : (
               <div className="results-empty">
-                <div className="empty-icon">
-                  <RouteIllustration />
+                <div className="empty-icon-wrapper">
+                  <Leaf size={48} className="text-emerald" />
                 </div>
-                <span className="eyebrow">THE FIRST STEP IS A SIMPLE ONE</span>
-                <h2>
-                  Good things are just
-                  <br />a journey away.
-                </h2>
+                <span className="eyebrow">YOUR JOURNEY AWAITS</span>
+                <h2>Good things start with a single trip</h2>
                 <p>
-                  Tell us where you’re going.
-                  <br />
-                  We’ll help you compare the possibilities.
+                  Enter your starting point and destination on the left to compare carbon emissions, estimated times, and earn eco rewards.
                 </p>
-                <div className="empty-modes">
-                  <Footprints />
-                  <Bike />
-                  <Bus />
-                  <Car />
+                <div className="empty-modes-row">
+                  <div className="empty-mode-chip"><Footprints size={18} /> Walk</div>
+                  <div className="empty-mode-chip"><Bike size={18} /> Bike</div>
+                  <div className="empty-mode-chip"><Bus size={18} /> Transit</div>
+                  <div className="empty-mode-chip"><Car size={18} /> Car</div>
                 </div>
               </div>
             )}
@@ -307,27 +402,5 @@ export default function Plan() {
         </div>
       </div>
     </Guard>
-  );
-}
-function RouteIllustration() {
-  return (
-    <svg viewBox="0 0 140 100" width="140" height="100" aria-hidden="true">
-      <path
-        d="M20 75C110 95 35 10 120 25"
-        fill="none"
-        stroke="#39775b"
-        strokeWidth="3"
-        strokeDasharray="6 6"
-      />
-      <circle cx="20" cy="75" r="9" fill="#39775b" />
-      <circle
-        cx="120"
-        cy="25"
-        r="9"
-        fill="#d4e598"
-        stroke="#39775b"
-        strokeWidth="3"
-      />
-    </svg>
   );
 }
