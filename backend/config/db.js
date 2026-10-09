@@ -8,27 +8,31 @@ async function connectDB() {
 
   let uri = process.env.MONGODB_URI;
   if (!uri) {
-    if (process.env.DEMO_MODE !== "true")
-      throw new Error(
-        "Set MONGODB_URI or explicitly enable temporary DEMO_MODE=true.",
-      );
-    // In serverless (Netlify), memory server won't persist between cold starts,
-    // but it lets the app function for demo purposes.
-    if (!memoryServer) {
-      memoryServer =
-        await require("mongodb-memory-server").MongoMemoryServer.create();
+    console.warn("MONGODB_URI is not set. Database operations will be disabled or fallback in demo mode.");
+    if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+      // On Vercel / serverless production, don't launch memory server child processes
+      return;
     }
-    uri = memoryServer.getUri();
-    console.warn(
-      "DEMO MODE: accounts and trips are temporary and disappear when the server stops.",
-    );
+    try {
+      if (!memoryServer) {
+        memoryServer = await require("mongodb-memory-server").MongoMemoryServer.create();
+      }
+      uri = memoryServer.getUri();
+    } catch (e) {
+      console.warn("Could not start MongoMemoryServer:", e.message);
+      return;
+    }
   }
-  await mongoose.connect(uri);
-  await Promise.all([
-    require("../models/User").init(),
-    require("../models/Trip").init(),
-  ]);
-  connected = true;
+  try {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+    await Promise.all([
+      require("../models/User").init().catch(() => {}),
+      require("../models/Trip").init().catch(() => {}),
+    ]);
+    connected = true;
+  } catch (err) {
+    console.error("MongoDB connection error:", err.message);
+  }
 }
 
 async function closeDB() {
