@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: process.cwd() },
   outputFileTracingRoot: process.cwd(),
   async rewrites() {
-    // On Netlify, API calls are handled by the redirect in netlify.toml,
-    // so rewrites are only needed for local development.
+    // Vercel routes production API traffic via vercel.json. This is for local
+    // development when the Express server runs separately.
     const apiUrl = process.env.API_URL;
     if (!apiUrl) return [];
     return [
