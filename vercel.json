@@ -1,13 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm ci && npm run setup",
-  "buildCommand": "npm run build:vercel",
-  "outputDirectory": "frontend/.next",
-  "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    }
-  ]
+  "installCommand": "npm ci --prefix backend",
+  "buildCommand": "",
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }]
 }
