@@ -1,6 +1,12 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm ci --prefix backend",
-  "buildCommand": "",
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }]
+  "version": 2,
+  "builds": [
+    { "src": "frontend/package.json", "use": "@vercel/next" },
+    { "src": "api/index.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index.js" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/frontend/$1" }
+  ]
 }
